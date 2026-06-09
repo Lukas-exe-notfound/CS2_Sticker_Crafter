@@ -1,1 +1,20 @@
-# CS2_Sticker_Crafter
+# StickerForge CS2
+
+Start de website zo:
+
+```bash
+npm install
+npm run dev
+```
+
+Laat het terminalvenster open staan. Open daarna:
+
+```text
+http://localhost:5173/
+```
+
+De craft editor staat op:
+
+```text
+http://localhost:5173/craft
+```
