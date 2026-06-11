@@ -1,4 +1,4 @@
-import { getAllStickers } from "../../services/stickerService";
+import { getCachedStickers } from "../../services/stickerService";
 import { useCraftStore } from "../../store/craftStore";
 import { calculateCraftScore } from "../../utils/colorMatch";
 
@@ -6,7 +6,7 @@ export function CraftScore() {
   const skin = useCraftStore((state) => state.selectedSkin);
   const placed = useCraftStore((state) => state.placedStickers);
   const budget = useCraftStore((state) => state.budget);
-  const score = calculateCraftScore(skin, placed, getAllStickers(), budget);
+  const score = calculateCraftScore(skin, placed, getCachedStickers(), budget);
   return (
     <section className="space-y-3 rounded-lg border border-white/10 bg-white/[0.04] p-3">
       <div className="flex items-center justify-between">

@@ -1,13 +1,19 @@
 import { motion } from "framer-motion";
 import { ArrowRight, BadgeEuro, Layers, Save, SlidersHorizontal, SplitSquareHorizontal } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllStickers } from "../services/stickerService";
+import { getAllStickers, getCachedStickers } from "../services/stickerService";
 import { Button } from "../components/ui/Button";
 import { StickerCard } from "../components/stickers/StickerCard";
 
 export function HomePage() {
   const navigate = useNavigate();
-  const stickers = getAllStickers().slice(0, 5);
+  const [stickers, setStickers] = useState(getCachedStickers().slice(0, 5));
+
+  useEffect(() => {
+    getAllStickers().then((loadedStickers) => setStickers(loadedStickers.slice(0, 5)));
+  }, []);
+
   const features = [
     ["Skin & sticker editor", Layers],
     ["Live scrape simulator", SlidersHorizontal],

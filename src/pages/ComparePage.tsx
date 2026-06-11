@@ -1,5 +1,5 @@
 import { getSkinById } from "../services/skinService";
-import { getAllStickers } from "../services/stickerService";
+import { getCachedStickers } from "../services/stickerService";
 import { useCraftStore } from "../store/craftStore";
 import { calculateCraftScore } from "../utils/colorMatch";
 import { ExportButton } from "../components/craft/ExportButton";
@@ -11,7 +11,7 @@ export function ComparePage() {
   const savedCrafts = useCraftStore((state) => state.savedCrafts);
   const crafts = compareCrafts.length ? compareCrafts : savedCrafts.slice(0, 4);
   const loadCraft = useCraftStore((state) => state.loadCraft);
-  const stickers = getAllStickers();
+  const stickers = getCachedStickers();
   const navigate = useNavigate();
   return (
     <div className="mx-auto max-w-[1500px] space-y-5 px-4 py-8">

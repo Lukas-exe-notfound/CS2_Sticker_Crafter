@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import { getAllSkins, getSkinById } from "../services/skinService";
-import { getAllStickers } from "../services/stickerService";
-import type { Craft, StickerInstance } from "../types/craft";
+import { getCachedSkins, getSkinById } from "../services/skinService";
+import { getCachedStickers } from "../services/stickerService";
+import type { Charm } from "../types/charm";
+import type { Craft, CraftCharmInstance, StickerInstance } from "../types/craft";
 import type { Skin } from "../types/skin";
 import type { Sticker } from "../types/sticker";
 import { calculateCraftPrice } from "../utils/priceCalculator";
@@ -12,7 +13,9 @@ const SAVED_KEY = "stickerforge-saved-crafts";
 interface Snapshot {
   selectedSkin?: Skin;
   placedStickers: StickerInstance[];
-  selectedStickerInstanceId?: string;
+  placedCharms: CraftCharmInstance[];
+  selectedStickerInstanceId: string | null;
+  selectedCharmInstanceId: string | null;
 }
 
 interface CraftStore extends Snapshot {
@@ -23,11 +26,16 @@ interface CraftStore extends Snapshot {
   compareCrafts: Craft[];
   selectSkin: (skin: Skin) => void;
   addSticker: (sticker: Sticker) => void;
+  addCharm: (charm: Charm) => void;
   removeSticker: (instanceId: string) => void;
+  removeCharm: (instanceId: string) => void;
   updateSticker: (instanceId: string, updates: Partial<StickerInstance>, recordHistory?: boolean) => void;
+  updateCharm: (instanceId: string, updates: Partial<CraftCharmInstance>, recordHistory?: boolean) => void;
   pushHistory: () => void;
   duplicateSticker: (instanceId: string) => void;
-  selectSticker: (instanceId?: string) => void;
+  duplicateCharm: (instanceId: string) => void;
+  selectSticker: (instanceId?: string | null) => void;
+  selectCharm: (instanceId?: string | null) => void;
   setScrapePercentage: (instanceId: string, percentage: number) => void;
   scrapeStickerStep: (instanceId: string) => void;
   resetStickerScrape: (instanceId: string) => void;
@@ -44,13 +52,15 @@ interface CraftStore extends Snapshot {
   removeFromCompare: (craftId: string) => void;
 }
 
-const initialSkin = getAllSkins()[0];
+const initialSkin = getCachedSkins()[0];
 
 function snapshot(state: Snapshot): Snapshot {
   return {
     selectedSkin: state.selectedSkin,
     placedStickers: state.placedStickers.map((sticker) => ({ ...sticker })),
+    placedCharms: state.placedCharms.map((charm) => ({ ...charm })),
     selectedStickerInstanceId: state.selectedStickerInstanceId,
+    selectedCharmInstanceId: state.selectedCharmInstanceId,
   };
 }
 
@@ -77,9 +87,21 @@ function makeInstance(sticker: Sticker, index: number): StickerInstance {
   };
 }
 
+function makeCharmInstance(charm: Charm, index: number): CraftCharmInstance {
+  return {
+    instanceId: `charm-${charm.id}-${Date.now()}-${index}`,
+    charmId: charm.id,
+    x: 50,
+    y: 50,
+    rotation: 0,
+    scale: 1,
+    opacity: 1,
+  };
+}
+
 function toCraft(state: CraftStore): Craft | undefined {
   if (!state.selectedSkin) return undefined;
-  const stickers = getAllStickers();
+  const stickers = getCachedStickers();
   const totalEstimatedPrice = calculateCraftPrice(state.selectedSkin, state.placedStickers, stickers).total;
   const now = new Date().toISOString();
   return {
@@ -90,6 +112,7 @@ function toCraft(state: CraftStore): Craft | undefined {
     statTrak: false,
     souvenir: false,
     stickers: state.placedStickers,
+    charms: state.placedCharms,
     totalEstimatedPrice,
     createdAt: now,
     updatedAt: now,
@@ -99,26 +122,45 @@ function toCraft(state: CraftStore): Craft | undefined {
 export const useCraftStore = create<CraftStore>((set, get) => ({
   selectedSkin: initialSkin,
   placedStickers: [],
-  selectedStickerInstanceId: undefined,
+  placedCharms: [],
+  selectedStickerInstanceId: null,
+  selectedCharmInstanceId: null,
   history: [],
   future: [],
   savedCrafts: readStorage<Craft[]>(SAVED_KEY, []),
   budget: 150,
   compareCrafts: [],
-  selectSkin: (skin) => set((state) => withHistory(state, { selectedSkin: skin, selectedStickerInstanceId: undefined })),
+  selectSkin: (skin) => set((state) => withHistory(state, { selectedSkin: skin, selectedStickerInstanceId: null, selectedCharmInstanceId: null })),
   addSticker: (sticker) =>
     set((state) => {
       const instance = makeInstance(sticker, state.placedStickers.length);
       return withHistory(state, {
         placedStickers: [...state.placedStickers, instance],
         selectedStickerInstanceId: instance.instanceId,
+        selectedCharmInstanceId: null,
+      });
+    }),
+  addCharm: (charm) =>
+    set((state) => {
+      const instance = makeCharmInstance(charm, state.placedCharms.length);
+      return withHistory(state, {
+        placedCharms: [...state.placedCharms, instance],
+        selectedCharmInstanceId: instance.instanceId,
+        selectedStickerInstanceId: null,
       });
     }),
   removeSticker: (instanceId) =>
     set((state) =>
       withHistory(state, {
         placedStickers: state.placedStickers.filter((sticker) => sticker.instanceId !== instanceId),
-        selectedStickerInstanceId: state.selectedStickerInstanceId === instanceId ? undefined : state.selectedStickerInstanceId,
+        selectedStickerInstanceId: state.selectedStickerInstanceId === instanceId ? null : state.selectedStickerInstanceId,
+      }),
+    ),
+  removeCharm: (instanceId) =>
+    set((state) =>
+      withHistory(state, {
+        placedCharms: state.placedCharms.filter((charm) => charm.instanceId !== instanceId),
+        selectedCharmInstanceId: state.selectedCharmInstanceId === instanceId ? null : state.selectedCharmInstanceId,
       }),
     ),
   updateSticker: (instanceId, updates, recordHistory = true) =>
@@ -126,6 +168,12 @@ export const useCraftStore = create<CraftStore>((set, get) => ({
       const nextStickers = state.placedStickers.map((sticker) => (sticker.instanceId === instanceId ? { ...sticker, ...updates } : sticker));
       if (!recordHistory) return { placedStickers: nextStickers };
       return withHistory(state, { placedStickers: nextStickers });
+    }),
+  updateCharm: (instanceId, updates, recordHistory = true) =>
+    set((state) => {
+      const nextCharms = state.placedCharms.map((charm) => (charm.instanceId === instanceId ? { ...charm, ...updates } : charm));
+      if (!recordHistory) return { placedCharms: nextCharms };
+      return withHistory(state, { placedCharms: nextCharms });
     }),
   pushHistory: () => set((state) => ({ history: [...state.history, snapshot(state)].slice(-60), future: [] })),
   duplicateSticker: (instanceId) =>
@@ -141,7 +189,20 @@ export const useCraftStore = create<CraftStore>((set, get) => ({
       };
       return withHistory(state, { placedStickers: [...state.placedStickers, clone], selectedStickerInstanceId: clone.instanceId });
     }),
-  selectSticker: (instanceId) => set({ selectedStickerInstanceId: instanceId }),
+  duplicateCharm: (instanceId) =>
+    set((state) => {
+      const source = state.placedCharms.find((charm) => charm.instanceId === instanceId);
+      if (!source) return {};
+      const clone = {
+        ...source,
+        instanceId: `charm-${source.charmId}-${Date.now()}`,
+        x: source.x + 28,
+        y: source.y + 28,
+      };
+      return withHistory(state, { placedCharms: [...state.placedCharms, clone], selectedCharmInstanceId: clone.instanceId, selectedStickerInstanceId: null });
+    }),
+  selectSticker: (instanceId) => set({ selectedStickerInstanceId: instanceId ?? null, selectedCharmInstanceId: null }),
+  selectCharm: (instanceId) => set({ selectedCharmInstanceId: instanceId ?? null, selectedStickerInstanceId: null }),
   setScrapePercentage: (instanceId, percentage) =>
     set((state) =>
       withHistory(state, {
@@ -177,7 +238,7 @@ export const useCraftStore = create<CraftStore>((set, get) => ({
         future: state.future.slice(1),
       };
     }),
-  resetCraft: () => set((state) => withHistory(state, { placedStickers: [], selectedStickerInstanceId: undefined })),
+  resetCraft: () => set((state) => withHistory(state, { placedStickers: [], placedCharms: [], selectedStickerInstanceId: null, selectedCharmInstanceId: null })),
   saveCraft: () => {
     const craft = toCraft(get());
     if (!craft) return undefined;
@@ -191,7 +252,15 @@ export const useCraftStore = create<CraftStore>((set, get) => ({
     const craft = get().savedCrafts.find((item) => item.id === id);
     const skin = craft ? getSkinById(craft.skinId) : undefined;
     if (!craft || !skin) return;
-    set((state) => withHistory(state, { selectedSkin: skin, placedStickers: craft.stickers, selectedStickerInstanceId: craft.stickers[0]?.instanceId }));
+    set((state) =>
+      withHistory(state, {
+        selectedSkin: skin,
+        placedStickers: craft.stickers,
+        placedCharms: craft.charms ?? [],
+        selectedStickerInstanceId: craft.stickers[0]?.instanceId ?? null,
+        selectedCharmInstanceId: null,
+      }),
+    );
   },
   deleteCraft: (id) => {
     const savedCrafts = get().savedCrafts.filter((craft) => craft.id !== id);

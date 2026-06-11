@@ -1,4 +1,4 @@
-import { getAllStickers } from "../../services/stickerService";
+import { getCachedStickers } from "../../services/stickerService";
 import { useCraftStore } from "../../store/craftStore";
 import { calculateCraftPrice } from "../../utils/priceCalculator";
 
@@ -6,7 +6,7 @@ export function PriceBreakdown() {
   const skin = useCraftStore((state) => state.selectedSkin);
   const placed = useCraftStore((state) => state.placedStickers);
   const budget = useCraftStore((state) => state.budget);
-  const prices = calculateCraftPrice(skin, placed, getAllStickers());
+  const prices = calculateCraftPrice(skin, placed, getCachedStickers());
   const overBudget = budget != null && prices.total > budget;
   return (
     <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">

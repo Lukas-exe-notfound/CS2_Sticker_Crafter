@@ -1,34 +1,50 @@
 import { useEffect, useRef, useState } from "react";
 import { getStickerById } from "../../services/stickerService";
+import { getCharmById } from "../../services/charmService";
 import { useCraftStore } from "../../store/craftStore";
-import { drawCraftToCanvas, hitTestSticker } from "./canvasRenderer";
+import { drawCraftToCanvas, hitTestCharm, hitTestSticker, preloadCharmImage } from "./canvasRenderer";
 
 export function CraftCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const selectedSkin = useCraftStore((state) => state.selectedSkin);
   const placedStickers = useCraftStore((state) => state.placedStickers);
+  const placedCharms = useCraftStore((state) => state.placedCharms);
   const selectedStickerInstanceId = useCraftStore((state) => state.selectedStickerInstanceId);
+  const selectedCharmInstanceId = useCraftStore((state) => state.selectedCharmInstanceId);
   const selectSticker = useCraftStore((state) => state.selectSticker);
+  const selectCharm = useCraftStore((state) => state.selectCharm);
   const updateSticker = useCraftStore((state) => state.updateSticker);
+  const updateCharm = useCraftStore((state) => state.updateCharm);
   const pushHistory = useCraftStore((state) => state.pushHistory);
   const removeSticker = useCraftStore((state) => state.removeSticker);
+  const removeCharm = useCraftStore((state) => state.removeCharm);
   const [draggingId, setDraggingId] = useState<string>();
+  const [imageTick, setImageTick] = useState(0);
   const dragRecordedRef = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const items = placedStickers.map((instance) => ({ instance, sticker: getStickerById(instance.stickerId) }));
-    drawCraftToCanvas(canvas, selectedSkin, items, selectedStickerInstanceId);
-  }, [selectedSkin, placedStickers, selectedStickerInstanceId]);
+    const charmItems = placedCharms.map((instance) => ({ instance, charm: getCharmById(instance.charmId) }));
+    drawCraftToCanvas(canvas, selectedSkin, items, charmItems, selectedStickerInstanceId, selectedCharmInstanceId);
+  }, [selectedSkin, placedStickers, placedCharms, selectedStickerInstanceId, selectedCharmInstanceId, imageTick]);
+
+  useEffect(() => {
+    placedCharms.forEach((instance) => {
+      const charm = getCharmById(instance.charmId);
+      if (charm?.imageUrl) preloadCharmImage(charm.imageUrl, () => setImageTick((tick) => tick + 1));
+    });
+  }, [placedCharms]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.key === "Delete" || event.key === "Backspace") && selectedStickerInstanceId) removeSticker(selectedStickerInstanceId);
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedCharmInstanceId) removeCharm(selectedCharmInstanceId);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [removeSticker, selectedStickerInstanceId]);
+  }, [removeCharm, removeSticker, selectedCharmInstanceId, selectedStickerInstanceId]);
 
   const pointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -46,9 +62,11 @@ export function CraftCanvas() {
       width={1200}
       onPointerDown={(event) => {
         const point = pointer(event);
-        const hit = hitTestSticker(placedStickers, point.x, point.y);
-        selectSticker(hit?.instanceId);
-        setDraggingId(hit?.instanceId);
+        const charmHit = hitTestCharm(placedCharms, point.x, point.y);
+        const stickerHit = charmHit ? undefined : hitTestSticker(placedStickers, point.x, point.y);
+        if (charmHit) selectCharm(charmHit.instanceId);
+        else selectSticker(stickerHit?.instanceId);
+        setDraggingId(charmHit?.instanceId ?? stickerHit?.instanceId);
         dragRecordedRef.current = false;
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
@@ -58,7 +76,8 @@ export function CraftCanvas() {
           pushHistory();
           dragRecordedRef.current = true;
         }
-        updateSticker(draggingId, pointer(event), false);
+        if (placedCharms.some((charm) => charm.instanceId === draggingId)) updateCharm(draggingId, pointer(event), false);
+        else updateSticker(draggingId, pointer(event), false);
       }}
       onPointerUp={() => {
         setDraggingId(undefined);

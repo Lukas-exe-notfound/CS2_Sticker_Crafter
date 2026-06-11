@@ -1,11 +1,11 @@
-import { getAllStickers } from "../../services/stickerService";
+import { getCachedStickers } from "../../services/stickerService";
 import { useCraftStore } from "../../store/craftStore";
 import { calculateCraftScore } from "../../utils/colorMatch";
 
 export function CompareDrawer() {
   const compareCrafts = useCraftStore((state) => state.compareCrafts);
   const removeFromCompare = useCraftStore((state) => state.removeFromCompare);
-  const stickers = getAllStickers();
+  const stickers = getCachedStickers();
   if (!compareCrafts.length) return null;
   return (
     <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-forge-panel p-3">

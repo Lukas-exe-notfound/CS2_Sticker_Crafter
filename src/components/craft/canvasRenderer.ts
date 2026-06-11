@@ -1,4 +1,6 @@
 import type { StickerInstance } from "../../types/craft";
+import type { Charm } from "../../types/charm";
+import type { CraftCharmInstance } from "../../types/craft";
 import type { Skin } from "../../types/skin";
 import type { Sticker } from "../../types/sticker";
 import { renderScrapedSticker } from "../../utils/scrapeEffect";
@@ -18,6 +20,23 @@ const colorHex: Record<string, string> = {
   green: "#22C55E",
   yellow: "#EAB308",
 };
+
+const charmImageCache = new Map<string, HTMLImageElement>();
+
+export function preloadCharmImage(url: string, onLoad?: () => void) {
+  const cached = charmImageCache.get(url);
+  if (cached) {
+    if (cached.complete) onLoad?.();
+    return cached;
+  }
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.referrerPolicy = "no-referrer";
+  image.onload = () => onLoad?.();
+  image.src = url;
+  charmImageCache.set(url, image);
+  return image;
+}
 
 export function drawSkin(ctx: CanvasRenderingContext2D, skin: Skin | undefined, width: number, height: number) {
   ctx.clearRect(0, 0, width, height);
@@ -93,22 +112,80 @@ export function drawStickerLayer(
   ctx.restore();
 }
 
+export function drawCharmLayer(ctx: CanvasRenderingContext2D, instance: CraftCharmInstance, charm: Charm | undefined, selected: boolean) {
+  const size = 78 * instance.scale;
+  ctx.save();
+  ctx.translate(instance.x, instance.y);
+  ctx.rotate((instance.rotation * Math.PI) / 180);
+  ctx.globalAlpha = instance.opacity;
+
+  const image = charm?.imageUrl ? preloadCharmImage(charm.imageUrl) : undefined;
+  const gradient = ctx.createLinearGradient(-size / 2, -size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, charm?.rarityColor ?? "#06B6D4");
+  gradient.addColorStop(1, "#111827");
+  ctx.fillStyle = gradient;
+  ctx.shadowColor = charm?.rarityColor ?? "#06B6D4";
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.roundRect(-size / 2, -size / 2, size, size, 14);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(255,255,255,.5)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  if (image?.complete && image.naturalWidth > 0) {
+    ctx.drawImage(image, -size * 0.43, -size * 0.43, size * 0.86, size * 0.86);
+  } else {
+    ctx.fillStyle = "rgba(7,10,18,.72)";
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#F9FAFB";
+    ctx.font = `800 ${Math.max(12, size * 0.18)}px Inter, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText((charm?.name ?? "CH").slice(0, 2).toUpperCase(), 0, 0);
+  }
+
+  if (selected) {
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#F59E0B";
+    ctx.setLineDash([7, 4]);
+    ctx.strokeRect(-size / 2 - 7, -size / 2 - 7, size + 14, size + 14);
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
 export function drawCraftToCanvas(
   canvas: HTMLCanvasElement,
   skin: Skin | undefined,
   stickerItems: { instance: StickerInstance; sticker?: Sticker }[],
-  selectedId?: string,
+  charmItems: { instance: CraftCharmInstance; charm?: Charm }[] = [],
+  selectedId?: string | null,
+  selectedCharmId?: string | null,
 ) {
   const ctx = canvas.getContext("2d")!;
   drawSkin(ctx, skin, canvas.width, canvas.height);
   for (const item of stickerItems) {
     if (item.sticker) drawStickerLayer(ctx, item.instance, item.sticker, item.instance.instanceId === selectedId);
   }
+  for (const item of charmItems) {
+    drawCharmLayer(ctx, item.instance, item.charm, item.instance.instanceId === selectedCharmId);
+  }
 }
 
 export function hitTestSticker(instances: StickerInstance[], x: number, y: number) {
   for (const instance of [...instances].reverse()) {
     const size = 70 * instance.scale;
+    if (Math.abs(x - instance.x) <= size && Math.abs(y - instance.y) <= size) return instance;
+  }
+  return undefined;
+}
+
+export function hitTestCharm(instances: CraftCharmInstance[], x: number, y: number) {
+  for (const instance of [...instances].reverse()) {
+    const size = 52 * instance.scale;
     if (Math.abs(x - instance.x) <= size && Math.abs(y - instance.y) <= size) return instance;
   }
   return undefined;

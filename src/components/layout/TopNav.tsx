@@ -6,6 +6,7 @@ const links = [
   ["Home", "/"],
   ["Craft Editor", "/craft"],
   ["Stickers", "/stickers"],
+  ["Charms", "/charms"],
   ["Saved Crafts", "/saved"],
   ["Compare", "/compare"],
 ];

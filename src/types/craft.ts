@@ -11,6 +11,16 @@ export interface StickerInstance {
   opacity: number;
 }
 
+export interface CraftCharmInstance {
+  instanceId: string;
+  charmId: number;
+  x: number;
+  y: number;
+  rotation: number;
+  scale: number;
+  opacity: number;
+}
+
 export interface Craft {
   id: string;
   name: string;
@@ -20,6 +30,7 @@ export interface Craft {
   statTrak: boolean;
   souvenir: boolean;
   stickers: StickerInstance[];
+  charms?: CraftCharmInstance[];
   totalEstimatedPrice: number;
   createdAt: string;
   updatedAt: string;
